@@ -1,0 +1,11 @@
+[project]
+name = "traffic-visualisation"
+version = "0.1.0"
+description = "API of data-provider -- producer that sends json data-packages to consumer"
+requires-python = ">=3.11"
+dependencies = [
+    "flask==3.1.0",
+    "pandas>=2.2.3",
+    "python-dotenv==1.0.1",
+    "requests>=2.32.3",
+]
