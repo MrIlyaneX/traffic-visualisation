@@ -27,12 +27,7 @@ E = TypeVar("E", bound=Any)
 app = Flask(__name__)
 cors = CORS(
     app,
-    resources={
-        r"/stream": {
-            "origins" : "*"
-           # "origins": FRONTED_SERVER_URL,
-        }
-    },
+    resources={r"/stream": {"origins": "*"}, r"/history": {"origins": "*"}},
 )
 
 
@@ -101,6 +96,21 @@ def receive_package():
     logger.info(f"Received: {res}")
     return jsonify({"message": "Package received"}), 200
 
+
+@app.route("/history")
+def get_history():
+    with package_lock:
+        packages_to_send = [pkg for pkg in received_packages]
+
+        historical_packages = []
+        for pkg in packages_to_send:
+            pkg_dict = pkg.model_dump()
+            pkg_dict["timestamp"] = pkg_dict["timestamp"].isoformat()
+            historical_packages.append(pkg_dict)
+
+    return jsonify(historical_packages)
+
+
 # (Server-Sent Events) SSE way to send data to fronend as it comes from the producer
 @app.route("/stream")
 def stream():
@@ -111,29 +121,31 @@ def stream():
         try:
             while True:
                 package_available = new_package_event.wait(timeout=30)
-                
+
                 if package_available:
                     with package_lock:
                         packages = []
                         while not package_queue.empty():
                             packages.append(package_queue.get())
-                        
+
                         for package in packages:
                             last_message_id += 1
                             try:
                                 package_dict = package.model_dump()
-                                package_dict['timestamp'] = package_dict['timestamp'].isoformat()
+                                package_dict["timestamp"] = package_dict[
+                                    "timestamp"
+                                ].isoformat()
                                 package_dict["packege_id"] = last_message_id
                                 logger.info(f"Sent: {package_dict}")
-                                #yield f"id: {last_message_id}\n"
+                                yield f"id: {last_message_id}\n"
                                 yield "event: package\n"
-                                #yield "retry: 3000\n"
+                                yield "retry: 3000\n"
                                 yield f"data: {json.dumps(package_dict)}\n\n"
                             except Exception as e:
                                 logger.error(f"Package serialization error: {e}")
-                    
+
                         new_package_event.clear()
-                
+
                 yield ":heartbeat\n\n"
 
         except GeneratorExit:
@@ -142,12 +154,12 @@ def stream():
             logger.error(f"SSE stream error: {str(e)}")
 
     response = Response(event_stream(), mimetype="text/event-stream")
-    response.headers['Connection'] = 'keep-alive'
-    response.headers['Content-Type'] = 'text/event-stream; charset=utf-8'
+    response.headers["Connection"] = "keep-alive"
+    response.headers["Content-Type"] = "text/event-stream; charset=utf-8"
     response.headers.add("Access-Control-Allow-Origin", "*")
     response.headers.add("Access-Control-Expose-Headers", "*")
-    response.headers['X-Accel-Buffering'] = 'no'
-    response.headers['Cache-Control'] = 'no-cache'
+    response.headers["X-Accel-Buffering"] = "no"
+    response.headers["Cache-Control"] = "no-cache"
     return response
 
 
