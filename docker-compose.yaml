@@ -1,0 +1,64 @@
+services:
+  api-producer:
+    build:
+      context: ./api-producer
+    container_name: producer
+    ports:
+      - 2080:8080
+    restart: "on-failure"
+    command: bash -c "python main.py"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    volumes:
+      - ./data:/data
+    environment:
+      - CSV_FILE=/data/ip_addresses.csv
+      - SERVER_URL=http://api-consumer:8080/receive
+    networks:
+      - dataflow
+    depends_on:
+      - api-consumer
+  api-consumer:
+    build:
+      context: ./api-consumer
+    container_name: consumer
+    ports:
+      - 8080:8080
+    restart: "on-failure"
+    command: bash -c "gunicorn -k eventlet -w 4 -b :8080 main:app"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    environment:
+      - FLASK_APP=main.py
+      - FLASK_ENV=development
+      - PRODUCER_SERVER_URL=http://api-producer:2080/
+      - FRONTED_SERVER_URL=http://frontend:5173/
+    networks:
+      - dataflow
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: frontend
+    restart: "on-failure"
+    ports:
+      - 5173:5173
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    depends_on:
+      - api-consumer
+    networks:
+      - dataflow
+
+networks:
+  dataflow:
+    driver: bridge
