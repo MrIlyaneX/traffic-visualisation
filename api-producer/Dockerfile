@@ -24,4 +24,4 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 COPY . /app
 
-EXPOSE 2080
+EXPOSE 8080
