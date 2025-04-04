@@ -2,112 +2,86 @@
 <html>
 
 <head>
-    <title>SSE Client</title>
-    <style>
-        .package {
-            margin: 10px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-        }
-
-        .connection-status {
-            padding: 10px;
-            margin: 5px;
-            border-radius: 3px;
-            text-align: center;
-        }
-
-        .connected {
-            background-color: #d4edda;
-        }
-
-        .reconnecting {
-            background-color: #fff3cd;
-        }
-
-        .disconnected {
-            background-color: #f8d7da;
-        }
-    </style>
+    <title>Traffic Visualization</title>
+    <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
-    <h1>Real-time Package Updates</h1>
-    <div id="connection-status" class="connection-status disconnected">Disconnected</div>
-    <div id="updates"></div>
+    <div class="main-content">
+        <div id="globe-container"></div>
+    </div>
 
-    <script>
-        const updatesDiv = document.getElementById('updates');
-        const statusDiv = document.getElementById('connection-status');
-        let es = null;
-        let reconnectTimer = null;
-        let reconnectAttempts = 0;
-        const maxReconnectAttempts = 5;
+    <div class="sidebar">
+        <div id="connection-status" class="connection-status disconnected">Disconnected</div>
+        <div class="dashboard">
+            <h2>Traffic Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Packages</h3>
+                    <div id="total-packages" class="stat-value">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Suspicious Packages</h3>
+                    <div id="suspicious-packages" class="stat-value">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Packages/Minute</h3>
+                    <div id="packages-per-minute" class="stat-value">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Unique IPs</h3>
+                    <div id="unique-ips" class="stat-value">0</div>
+                </div>
+                <div class="stat-card location-card">
+                    <h3>Top Location</h3>
+                    <div id="top-location" class="stat-value">-</div>
+                    <div id="top-location-details" class="stat-details">-</div>
+                </div>
+            </div>
+        </div>
+        <div class="updates-container">
+            <div class="updates-header">Incoming Network Traffic</div>
+            <div id="updates"></div>
+        </div>
+    </div>
 
-        function updateStatus(status, className) {
-            statusDiv.textContent = status;
-            statusDiv.className = `connection-status ${className}`;
+    <div class="controls-panel">
+        <div class="control-group">
+            <label for="pointLimit">Max Points:</label>
+            <input type="number" id="pointLimit" value="50" min="1" max="1000">
+        </div>
+        <div class="control-group">
+            <label for="fadeTime">Fade Time (sec):</label>
+            <input type="number" id="fadeTime" value="30" min="1" max="300">
+        </div>
+        <div class="preset-group">
+            <div class="preset-option">
+                <input type="radio" id="presetNormal" name="preset" value="normal" checked>
+                <label for="presetNormal">Normal (50 points, 30s)</label>
+            </div>
+            <div class="preset-option">
+                <input type="radio" id="presetDense" name="preset" value="dense">
+                <label for="presetDense">Dense (100 points, 60s)</label>
+            </div>
+            <div class="preset-option">
+                <input type="radio" id="presetSparse" name="preset" value="sparse">
+                <label for="presetSparse">Sparse (25 points, 15s)</label>
+            </div>
+        </div>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/"
         }
-
-        function renderPackage(data) {
-            const entry = document.createElement('div');
-            entry.className = 'package';
-            entry.innerHTML = `
-                <p><strong>Package ${data.packege_id} @ ${new Date().toLocaleTimeString()}:</strong></p>
-                <ul>
-                    <li>IP: ${data.ip}</li>
-                    <li>Location: ${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}</li>
-                    <li>Received: ${new Date(data.timestamp).toLocaleString()}</li>
-                    <li>Suspicious: ${data.suspicious}</li>
-                </ul>
-            `;
-            updatesDiv.prepend(entry);
-        }
-
-        function connectSSE() {
-            if (es) es.close();
-
-            updateStatus('Connecting...', 'reconnecting');
-            es = new EventSource('http://localhost:8080/stream');
-
-            es.addEventListener('open', () => {
-                reconnectAttempts = 0;
-                updateStatus('Connected', 'connected');
-            });
-
-            es.addEventListener('package', (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    renderPackage(data);
-                } catch (err) {
-                    console.error("Parse error:", err, "Data:", e.data);
-                }
-            });
-
-            es.onerror = () => {
-                updateStatus('Connection lost', 'disconnected');
-                es.close();
-
-                if (reconnectAttempts < maxReconnectAttempts) {
-                    reconnectAttempts++;
-                    const delay = Math.min(1000 * reconnectAttempts, 5000);
-                    updateStatus(`Reconnecting in ${delay / 1000}s (attempt ${reconnectAttempts})`, 'reconnecting');
-                    reconnectTimer = setTimeout(connectSSE, delay);
-                } else {
-                    updateStatus('Disconnected - max retries reached', 'disconnected');
-                }
-            };
-        }
-
-        connectSSE();
-
-        window.addEventListener('beforeunload', () => {
-            if (es) es.close();
-            if (reconnectTimer) clearTimeout(reconnectTimer);
-        });
+    }
     </script>
+    <script type="module" src="scripts.js"></script>
+
 </body>
 
 </html>
