@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>SSE Client</title>
+    <style>
+        .package {
+            margin: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+
+        .connection-status {
+            padding: 10px;
+            margin: 5px;
+            border-radius: 3px;
+            text-align: center;
+        }
+
+        .connected {
+            background-color: #d4edda;
+        }
+
+        .reconnecting {
+            background-color: #fff3cd;
+        }
+
+        .disconnected {
+            background-color: #f8d7da;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Real-time Package Updates</h1>
+    <div id="connection-status" class="connection-status disconnected">Disconnected</div>
+    <div id="updates"></div>
+
+    <script>
+        const updatesDiv = document.getElementById('updates');
+        const statusDiv = document.getElementById('connection-status');
+        let es = null;
+        let reconnectTimer = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+
+        function updateStatus(status, className) {
+            statusDiv.textContent = status;
+            statusDiv.className = `connection-status ${className}`;
+        }
+
+        function renderPackage(data) {
+            const entry = document.createElement('div');
+            entry.className = 'package';
+            entry.innerHTML = `
+                <p><strong>Package ${data.packege_id} @ ${new Date().toLocaleTimeString()}:</strong></p>
+                <ul>
+                    <li>IP: ${data.ip}</li>
+                    <li>Location: ${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}</li>
+                    <li>Received: ${new Date(data.timestamp).toLocaleString()}</li>
+                    <li>Suspicious: ${data.suspicious}</li>
+                </ul>
+            `;
+            updatesDiv.prepend(entry);
+        }
+
+        function connectSSE() {
+            if (es) es.close();
+
+            updateStatus('Connecting...', 'reconnecting');
+            es = new EventSource('http://localhost:8080/stream');
+
+            es.addEventListener('open', () => {
+                reconnectAttempts = 0;
+                updateStatus('Connected', 'connected');
+            });
+
+            es.addEventListener('package', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    renderPackage(data);
+                } catch (err) {
+                    console.error("Parse error:", err, "Data:", e.data);
+                }
+            });
+
+            es.onerror = () => {
+                updateStatus('Connection lost', 'disconnected');
+                es.close();
+
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    const delay = Math.min(1000 * reconnectAttempts, 5000);
+                    updateStatus(`Reconnecting in ${delay / 1000}s (attempt ${reconnectAttempts})`, 'reconnecting');
+                    reconnectTimer = setTimeout(connectSSE, delay);
+                } else {
+                    updateStatus('Disconnected - max retries reached', 'disconnected');
+                }
+            };
+        }
+
+        connectSSE();
+
+        window.addEventListener('beforeunload', () => {
+            if (es) es.close();
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+        });
+    </script>
+</body>
+
+</html>
